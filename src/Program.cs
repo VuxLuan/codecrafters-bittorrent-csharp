@@ -31,6 +31,22 @@ if (command == "decode")
             throw new InvalidOperationException("Invalid encoded value: " + encodedValue);
         }
     }
+
+    else if (Char.IsLetter(encodedValue[0]))
+    {
+        var iIndex = encodedValue.IndexOf('i');
+        var eIndex = encodedValue.IndexOf('e');
+        if (iIndex != -1)
+        {
+            var strLength = eIndex - iIndex;
+            var strValue = encodedValue.Substring(iIndex + 1, strLength-1);
+            Console.WriteLine(strValue);
+        }
+        else
+        {
+            throw new InvalidOperationException("Invalid encoded value: " + encodedValue);
+        }
+    }
     else
     {
         throw new InvalidOperationException("Unhandled encoded value: " + encodedValue);
