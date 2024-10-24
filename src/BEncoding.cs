@@ -16,7 +16,11 @@ public class BEncoding
         {
             return BDecodeList(encodedValue);
         }
-        else
+
+        if (encodedValue[0] == 'd')
+        {
+            return BDecodeDict(encodedValue);
+        }
         {
             throw new InvalidOperationException("Unhandled encoded value: " + encodedValue);
         }
@@ -29,9 +33,18 @@ public class BEncoding
             {
                 TypeCode.Int16 or TypeCode.Int32 or TypeCode.Int64 => $"i{input}e",
                 TypeCode.String => $"{((string)input).Length}:{input}",
-                TypeCode.Object => input is object[] inputArray
-                        ? $"l{string.Join("", inputArray.Select(x => EnCode(x)))}e"
-                        : throw new Exception($"Unknown type:{input.GetType().FullName}"),
+                TypeCode.Object => input switch
+                {
+                    // Handle arrays of objects (encoded as a list)
+                    object[] inputArray => $"l{string.Join("", inputArray.Select(x => EnCode(x)))}e",
+
+                    // Handle dictionaries (encoded as a dictionary)
+                    Dictionary<string, object> inputDictionary =>
+                        $"d{string.Join("", inputDictionary.Select(kvp => $"{EnCode(kvp.Key)}{EnCode(kvp.Value)}"))}",
+
+                    // Throw an exception for unknown object types
+                    _ => throw new Exception($"Unknown object type: {input.GetType().FullName}")
+                },
                 _ => throw new Exception($"Unknown type:{input.GetType().FullName}")
             };
     }
@@ -69,6 +82,25 @@ public class BEncoding
 
         }
         return results.ToArray();
+    }
+    
+
+    private static Dictionary<string, object> BDecodeDict(string encodedValue)
+    {
+        encodedValue = encodedValue[1..];
+        var results = new Dictionary<string, object>();
+        while (encodedValue.Length > 0 && encodedValue[0] != 'e')
+        {
+            var key = BDecodeStr(encodedValue);
+            encodedValue = encodedValue[(EnCode(key).Length)..];
+            var value = Decode(encodedValue);
+            results.Add(key, value);
+            encodedValue = encodedValue[EnCode(value).Length..];
+        }
+        
+        var sortDict = new SortedDictionary<string, object>(results);
+        var sortResult = new Dictionary<string, object>(sortDict);
+        return sortResult;
     }
 
     
