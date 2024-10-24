@@ -1,4 +1,5 @@
 using System.Text.Json;
+using codecrafters_bittorrent;
 
 // Parse arguments
 var (command, param) = args.Length switch
@@ -8,7 +9,8 @@ var (command, param) = args.Length switch
     _ => (args[0], args[1])
 };
 
-// Parse command and act accordingly
+
+// Parse command, and act accordingly
 if (command == "decode")
 {
     // You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -16,41 +18,7 @@ if (command == "decode")
 
     // Uncomment this line to pass the first stage
     var encodedValue = param;
-    if (Char.IsDigit(encodedValue[0]))
-    {
-        // Example: "5:hello" -> "hello"
-        var colonIndex = encodedValue.IndexOf(':');
-        if (colonIndex != -1)
-        {
-            var strLength = int.Parse(encodedValue[..colonIndex]);
-            var strValue = encodedValue.Substring(colonIndex + 1, strLength);
-            Console.WriteLine(JsonSerializer.Serialize(strValue));
-        }
-        else
-        {
-            throw new InvalidOperationException("Invalid encoded value: " + encodedValue);
-        }
-    }
-
-    else if (Char.IsLetter(encodedValue[0]))
-    {
-        var iIndex = encodedValue.IndexOf('i');
-        var eIndex = encodedValue.IndexOf('e');
-        if (iIndex != -1)
-        {
-            var strLength = eIndex - iIndex;
-            var strValue = encodedValue.Substring(iIndex + 1, strLength-1);
-            Console.WriteLine(strValue);
-        }
-        else
-        {
-            throw new InvalidOperationException("Invalid encoded value: " + encodedValue);
-        }
-    }
-    else
-    {
-        throw new InvalidOperationException("Unhandled encoded value: " + encodedValue);
-    }
+    Console.WriteLine(JsonSerializer.Serialize(BEncoding.Decode(encodedValue)));
 }
 else
 {
