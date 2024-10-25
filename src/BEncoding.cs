@@ -1,7 +1,13 @@
+using System.Text;
+using System.Text.Json;
+
 namespace codecrafters_bittorrent;
 
-public class BEncoding
+public static class BEncoding
 {
+    record TorrentFile(string Announce, TorrentFileInfo Info);
+    record TorrentFileInfo(int Length);
+    
     public static object Decode(string encodedValue)
     {
         if (Char.IsDigit(encodedValue[0]))
@@ -88,7 +94,7 @@ public class BEncoding
     private static Dictionary<string, object> BDecodeDict(string encodedValue)
     {
         encodedValue = encodedValue[1..];
-        var results = new Dictionary<string, object>();
+        var results = new SortedDictionary<string, object>();
         while (encodedValue.Length > 0 && encodedValue[0] != 'e')
         {
             var key = BDecodeStr(encodedValue);
@@ -97,11 +103,34 @@ public class BEncoding
             results.Add(key, value);
             encodedValue = encodedValue[EnCode(value).Length..];
         }
-        
-        var sortDict = new SortedDictionary<string, object>(results);
-        var sortResult = new Dictionary<string, object>(sortDict);
+        var sortResult = new Dictionary<string, object>(results);
         return sortResult;
     }
+
+    public static void TorrentFileParser(string fileName)
+    {
+        if (!File.Exists(fileName))
+        {
+            throw new FileNotFoundException("File not found", fileName);
+        }
+
+        try
+        {
+            var torrentData = File.ReadAllBytes(fileName);
+            var encodeValue = Encoding.ASCII.GetString(torrentData);
+            var decodedValue = BEncoding.Decode(encodeValue);
+            var serializedValue = JsonSerializer.Serialize(decodedValue);
+            var jsonSerializerOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true};
+            var torrentFile = JsonSerializer.Deserialize<TorrentFile>(serializedValue, jsonSerializerOptions)!;
+            Console.WriteLine($"Tracker URL: {torrentFile.Announce}");
+            Console.WriteLine($"Length: {torrentFile.Info.Length}");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("Error parsing torrent file: " + e.Message);
+        }
+    }
+    
 
     
 }

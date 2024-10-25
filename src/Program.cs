@@ -20,7 +20,14 @@ if (command == "decode")
     var encodedValue = param;
     Console.WriteLine(JsonSerializer.Serialize(BEncoding.Decode(encodedValue)));
 }
+
+else if (command == "info")
+{
+    var fileName = param;
+    BEncoding.TorrentFileParser(fileName);
+}
 else
 {
     throw new InvalidOperationException($"Invalid command: {command}");
 }
+
