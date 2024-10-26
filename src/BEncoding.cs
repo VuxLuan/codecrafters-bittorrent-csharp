@@ -120,7 +120,6 @@ public static class BEncoding
             var serializedValue = JsonSerializer.Serialize(decodedValue);
             var jsonSerializerOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true};
             var torrentFile = JsonSerializer.Deserialize<TorrentFile>(serializedValue, jsonSerializerOptions)!;
-            var info = decodedValue?["info"] as SortedDictionary<string, object>;
             const string infoMarker = "4:infod";
             var hashStart = encodeValue.IndexOf(infoMarker, StringComparison.Ordinal) +
                 infoMarker.Length - 1;
