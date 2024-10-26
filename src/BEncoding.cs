@@ -1,13 +1,8 @@
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
-
 namespace codecrafters_bittorrent;
 
 public static class BEncoding
 {
-    record TorrentFile(string Announce, TorrentFileInfo Info);
-    record TorrentFileInfo(int Length, string Name, long PieceLength, string Pieces);
+    
     
     public static object Decode(string encodedValue)
     {
@@ -104,35 +99,5 @@ public static class BEncoding
         
         return results;
     }
-
-    public static void TorrentFileParser(string fileName)
-    {
-        if (!File.Exists(fileName))
-        {
-            throw new FileNotFoundException("File not found", fileName);
-        }
-
-        try
-        {
-            var torrentData = File.ReadAllBytes(fileName);
-            var encodeValue = Encoding.ASCII.GetString(torrentData);
-            var decodedValue = Decode(encodeValue) as SortedDictionary<string, object>;
-            var serializedValue = JsonSerializer.Serialize(decodedValue);
-            var jsonSerializerOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true};
-            var torrentFile = JsonSerializer.Deserialize<TorrentFile>(serializedValue, jsonSerializerOptions)!;
-            const string infoMarker = "4:infod";
-            var hashStart = encodeValue.IndexOf(infoMarker, StringComparison.Ordinal) +
-                infoMarker.Length - 1;
-            var chunk = torrentData[hashStart..^ 1];
-            var hash = Convert.ToHexString(SHA1.HashData(chunk)).ToLower();
-            Console.WriteLine($"Tracker URL: {torrentFile.Announce} \nLength: {torrentFile.Info.Length} \nInfo Hash: {hash}");
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine("Error parsing torrent file: " + e.Message);
-        }
-    }
-    
-
     
 }

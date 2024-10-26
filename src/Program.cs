@@ -24,7 +24,7 @@ if (command == "decode")
 else if (command == "info")
 {
     var fileName = param;
-    BEncoding.TorrentFileParser(fileName);
+    TorrentFileParser.Parser(fileName);
 }
 else
 {
