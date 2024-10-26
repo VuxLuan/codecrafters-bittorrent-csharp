@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -6,7 +7,7 @@ namespace codecrafters_bittorrent;
 public static class BEncoding
 {
     record TorrentFile(string Announce, TorrentFileInfo Info);
-    record TorrentFileInfo(int Length);
+    record TorrentFileInfo(int Length, string Name, long PieceLength, string Pieces);
     
     public static object Decode(string encodedValue)
     {
@@ -41,14 +42,11 @@ public static class BEncoding
                 TypeCode.String => $"{((string)input).Length}:{input}",
                 TypeCode.Object => input switch
                 {
-                    // Handle arrays of objects (encoded as a list)
                     object[] inputArray => $"l{string.Join("", inputArray.Select(x => EnCode(x)))}e",
-
-                    // Handle dictionaries (encoded as a dictionary)
-                    Dictionary<string, object> inputDictionary =>
+                    
+                    SortedDictionary<string, object> inputDictionary =>
                         $"d{string.Join("", inputDictionary.Select(kvp => $"{EnCode(kvp.Key)}{EnCode(kvp.Value)}"))}",
-
-                    // Throw an exception for unknown object types
+                    
                     _ => throw new Exception($"Unknown object type: {input.GetType().FullName}")
                 },
                 _ => throw new Exception($"Unknown type:{input.GetType().FullName}")
@@ -91,7 +89,7 @@ public static class BEncoding
     }
     
 
-    private static Dictionary<string, object> BDecodeDict(string encodedValue)
+    private static SortedDictionary<string, object> BDecodeDict(string encodedValue)
     {
         encodedValue = encodedValue[1..];
         var results = new SortedDictionary<string, object>();
@@ -103,8 +101,8 @@ public static class BEncoding
             results.Add(key, value);
             encodedValue = encodedValue[EnCode(value).Length..];
         }
-        var sortResult = new Dictionary<string, object>(results);
-        return sortResult;
+        
+        return results;
     }
 
     public static void TorrentFileParser(string fileName)
@@ -118,12 +116,17 @@ public static class BEncoding
         {
             var torrentData = File.ReadAllBytes(fileName);
             var encodeValue = Encoding.ASCII.GetString(torrentData);
-            var decodedValue = BEncoding.Decode(encodeValue);
+            var decodedValue = Decode(encodeValue) as SortedDictionary<string, object>;
             var serializedValue = JsonSerializer.Serialize(decodedValue);
             var jsonSerializerOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true};
             var torrentFile = JsonSerializer.Deserialize<TorrentFile>(serializedValue, jsonSerializerOptions)!;
-            Console.WriteLine($"Tracker URL: {torrentFile.Announce}");
-            Console.WriteLine($"Length: {torrentFile.Info.Length}");
+            var info = decodedValue?["info"] as SortedDictionary<string, object>;
+            const string infoMarker = "4:infod";
+            var hashStart = encodeValue.IndexOf(infoMarker, StringComparison.Ordinal) +
+                infoMarker.Length - 1;
+            var chunk = torrentData[hashStart..^ 1];
+            var hash = Convert.ToHexString(SHA1.HashData(chunk)).ToLower();
+            Console.WriteLine($"Tracker URL: {torrentFile.Announce} \nLength: {torrentFile.Info.Length} \nInfo Hash: {hash}");
         }
         catch (Exception e)
         {
