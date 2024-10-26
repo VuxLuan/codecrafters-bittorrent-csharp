@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace codecrafters_bittorrent;
 
@@ -8,7 +9,12 @@ public static class TorrentFileParser
 {
     private record TorrentFile(string Announce, TorrentFileInfo Info);
 
-    private record TorrentFileInfo(int Length, string Name, long PieceLength, string Pieces);
+    private record TorrentFileInfo(
+        long Length, 
+        string Name, 
+        [property: JsonPropertyName("piece length")] int PieceLength, 
+        string Pieces
+    );
 
     public static void Parser(string fileName)
     {
@@ -31,13 +37,14 @@ public static class TorrentFileParser
             var chunk = torrentData[hashStart..^ 1];
             var hash = Convert.ToHexString(SHA1.HashData(chunk)).ToLower();
             Console.WriteLine(
-                $"Tracker URL: {torrentFile.Announce} \nLength: {torrentFile.Info.Length} \nInfo Hash: {hash}");
+                $"Tracker URL: {torrentFile.Announce} \nLength: {torrentFile.Info.Length} \nInfo Hash: {hash} \nPiece Length: {torrentFile.Info.PieceLength}");
             
             var piecesBytes = Encoding.ASCII.GetBytes(torrentFile.Info.Pieces);
+            Console.WriteLine("Piece Hashes:");
             for (var i = 20; i <= piecesBytes.Length; i += 20)
             {
                 var pieceHash = Convert.ToHexString(SHA1.HashData(piecesBytes[..i])).ToLower();
-                Console.WriteLine($"{pieceHash}");
+                Console.WriteLine(pieceHash);
             }
             
         }
