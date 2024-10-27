@@ -27,7 +27,7 @@ public static class TorrentFileParser
         {
             var torrentData = File.ReadAllBytes(fileName);
             var encodeValue = Encoding.ASCII.GetString(torrentData);
-            var decodedValue = BEncoding.Decode(encodeValue) as SortedDictionary<string, object>;
+            var decodedValue = BEncoding.Decode(encodeValue);
             var serializedValue = JsonSerializer.Serialize(decodedValue);
             var jsonSerializerOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             var torrentFile = JsonSerializer.Deserialize<TorrentFile>(serializedValue, jsonSerializerOptions)!;
@@ -39,14 +39,14 @@ public static class TorrentFileParser
             Console.WriteLine(
                 $"Tracker URL: {torrentFile.Announce} \nLength: {torrentFile.Info.Length} \nInfo Hash: {hash} \nPiece Length: {torrentFile.Info.PieceLength}");
             
-            var piecesBytes = Encoding.ASCII.GetBytes(torrentFile.Info.Pieces);
-            Console.WriteLine("Piece Hashes:");
-            for (var i = 20; i <= piecesBytes.Length; i += 20)
-            {
-                var pieceHash = Convert.ToHexString(SHA1.HashData(piecesBytes[..i])).ToLower();
-                Console.WriteLine(pieceHash);
-            }
-            
+            // Encoding.ASCII.GetBytes(torrentFile.Info.Pieces).Chunk(20).ToList().ForEach(
+            //     x => Console.WriteLine(Convert.ToHexString(x).ToLower()));
+            const string piecesMark = "6:pieces";
+            var piecesBytesStart = torrentData[(encodeValue.IndexOf(piecesMark, StringComparison.Ordinal) + piecesMark.Length - 1)..];
+            var piecesStreamStart = encodeValue[(encodeValue.IndexOf(piecesMark, StringComparison.Ordinal) + piecesMark.Length - 1)..];
+            var pchunk = piecesBytesStart[(piecesStreamStart.IndexOf(':', StringComparison.Ordinal) + 1)..^1];
+            pchunk.Chunk(20).ToList().ForEach(
+                x => Console.WriteLine(Convert.ToHexString(x).ToLower()));
         }
         catch (Exception e)
         {
