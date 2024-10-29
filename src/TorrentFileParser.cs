@@ -5,18 +5,17 @@ using System.Text.Json.Serialization;
 
 namespace codecrafters_bittorrent;
 
-public static class TorrentFileParser
+public class TorrentFileParser
 {
-    private record TorrentFile(string Announce, TorrentFileInfo Info);
+    public string Announce { get; private set; } = string.Empty;
+    public byte[]? InfoHash { get; private set; }
+    public List<byte[]> PieceHashes { get; } = [];
+    public int PieceLength { get; private set; }
+    public long Length { get; private set; }
+    public string Name { get; set; } = string.Empty;
+    
 
-    private record TorrentFileInfo(
-        long Length, 
-        string Name, 
-        [property: JsonPropertyName("piece length")] int PieceLength, 
-        string Pieces
-    );
-
-    public static void Parser(string fileName)
+    public async Task ParserAsync(string fileName)
     {
         if (!File.Exists(fileName))
         {
@@ -25,7 +24,11 @@ public static class TorrentFileParser
 
         try
         {
-            var torrentData = File.ReadAllBytes(fileName);
+            await using var fileStream = File.OpenRead(fileName);
+            using BinaryReader binaryReader = new(fileStream);
+            
+            var torrentData = binaryReader.ReadBytes((int)fileStream.Length);
+            
             var encodeValue = Encoding.ASCII.GetString(torrentData);
             var decodedValue = BEncoding.Decode(encodeValue);
             var serializedValue = JsonSerializer.Serialize(decodedValue);
@@ -34,23 +37,24 @@ public static class TorrentFileParser
             const string infoMarker = "4:infod";
             var hashStart = encodeValue.IndexOf(infoMarker, StringComparison.Ordinal) +
                 infoMarker.Length - 1;
-            var chunk = torrentData[hashStart..^ 1];
-            var hash = Convert.ToHexString(SHA1.HashData(chunk)).ToLower();
-            Console.WriteLine(
-                $"Tracker URL: {torrentFile.Announce} \nLength: {torrentFile.Info.Length} \nInfo Hash: {hash} \nPiece Length: {torrentFile.Info.PieceLength}");
+            InfoHash = torrentData[hashStart..^ 1];
+            Announce = torrentFile.Announce;
+            PieceLength = torrentFile.Info.PieceLength;
+            Length = torrentFile.Info.Length;
+            Name = torrentFile.Info.Name;
             
-            // Encoding.ASCII.GetBytes(torrentFile.Info.Pieces).Chunk(20).ToList().ForEach(
-            //     x => Console.WriteLine(Convert.ToHexString(x).ToLower()));
             const string piecesMark = "6:pieces";
             var piecesBytesStart = torrentData[(encodeValue.IndexOf(piecesMark, StringComparison.Ordinal) + piecesMark.Length - 1)..];
             var piecesStreamStart = encodeValue[(encodeValue.IndexOf(piecesMark, StringComparison.Ordinal) + piecesMark.Length - 1)..];
-            var pchunk = piecesBytesStart[(piecesStreamStart.IndexOf(':', StringComparison.Ordinal) + 1)..^1];
-            pchunk.Chunk(20).ToList().ForEach(
-                x => Console.WriteLine(Convert.ToHexString(x).ToLower()));
+            var piecesChunk = piecesBytesStart[(piecesStreamStart.IndexOf(':', StringComparison.Ordinal) + 1)..^1];
+            piecesChunk.Chunk(20).ToList().ForEach(
+                x => PieceHashes.Add(x));
+            
         }
         catch (Exception e)
         {
             Console.WriteLine("Error parsing torrent file: " + e.Message);
+            throw;
         }
     }
 }
