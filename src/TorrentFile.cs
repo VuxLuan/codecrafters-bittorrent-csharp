@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json.Serialization;
 
 namespace codecrafters_bittorrent;
@@ -12,4 +13,5 @@ public record TorrentFileInfo(
     string Pieces
 );
 
-public record Peers(int Interval, string PeersIp);
+public record PeerEndpoint(IPAddress Ip, int Port);
+
