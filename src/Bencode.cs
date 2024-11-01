@@ -1,10 +1,9 @@
-namespace codecrafters_bittorrent;
-
-using System.Collections.Immutable;
-using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+
+namespace codecrafters_bittorrent;
+
 public static class Bencode {
   public static BencodedValue Decode(ArraySegment<byte> encodedValue) {
     var firstChar = (char)encodedValue[0];
@@ -19,7 +18,7 @@ public static class Bencode {
           var stringBytes = encodedValue.Slice(colonIndex + 1, strLength);
           return new BencodedString {
             OriginalData = encodedValue[..(colonIndex + strLength + 1)],
-            Value = stringBytes,
+            Value = stringBytes
           };
         } catch {
           Console.WriteLine(
@@ -36,7 +35,7 @@ public static class Bencode {
         if (long.TryParse(encodedValue[1..end], out var integer)) {
           return new BencodedInt {
             OriginalData = encodedValue[..(end + 1)],
-            Value = integer,
+            Value = integer
           };
         }
 
@@ -49,7 +48,7 @@ public static class Bencode {
         if (encodedValue[1] == 'e') {
           return new BencodedList {
             OriginalData = encodedValue[..2],
-            Value = list,
+            Value = list
           };
         }
         var index = 1;
@@ -66,7 +65,7 @@ public static class Bencode {
         }
         return new BencodedList {
           OriginalData = encodedValue[..(index + 1)],
-          Value = list,
+          Value = list
         };
       }
       // dict
@@ -76,7 +75,7 @@ public static class Bencode {
         if (encodedValue[1] == 'e') {
           return new BencodedDict {
             OriginalData = encodedValue[..2],
-            Value = dict,
+            Value = dict
           };
         }
         var index = 1;
@@ -95,7 +94,7 @@ public static class Bencode {
         }
         return new BencodedDict {
           OriginalData = encodedValue[..(index + 1)],
-          Value = dict,
+          Value = dict
         };
       }
     }
@@ -122,16 +121,17 @@ public abstract class BencodedValue {
   public object Value { get; init; }
 }
 public class BencodedString : BencodedValue {
-  public ArraySegment<byte> Bytes => (ArraySegment<byte>)base.Value;
+  public ArraySegment<byte> Bytes => (ArraySegment<byte>)Value;
   public string Str => Encoding.UTF8.GetString(Bytes);
 }
 public class BencodedInt : BencodedValue {
-  public long Int => (long)base.Value;
+  public long Int => (long)Value;
 }
 public class BencodedList : BencodedValue {
-  public List<BencodedValue> List => (List<BencodedValue>)base.Value;
+  public List<BencodedValue> List => (List<BencodedValue>)Value;
 }
 public class BencodedDict : BencodedValue {
   public Dictionary<string, BencodedValue> Dict =>
-      (Dictionary<string, BencodedValue>)base.Value;
+      (Dictionary<string, BencodedValue>)Value;
 }
+
