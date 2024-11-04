@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace codecrafters_bittorrent;
 
+
 [JsonConverter(typeof(BencodedValueJsonConverter))]
 public abstract record BencodedValue
 {
@@ -60,3 +61,4 @@ public class BencodeException : Exception
     {
     }
 }
+
