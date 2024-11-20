@@ -273,7 +273,7 @@ public class TorrentClient(string fileName)
         BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan()[..4], index);
         BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan()[4..8], begin);
         BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan()[8..12], length);
-        Console.WriteLine($"Requesting block: Index={index}, Begin={begin}, Length={length}");
+        //Console.WriteLine($"Requesting block: Index={index}, Begin={begin}, Length={length}");
         await SendMessageAsync(MessageType.Request, payload);
     }
 
