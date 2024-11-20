@@ -13,8 +13,9 @@ public class TorrentClient(string fileName)
     private const int HandshakeLength = 68;
     private const int ConnectionTimeout = 10000; // 10 seconds
 
-    private NetworkStream _stream = null!;
-    private readonly TcpClient _tcpClient = new();
+    private NetworkStream? _stream;
+    private TcpClient? _tcpClient;
+    
 
     private async Task<byte[]> ReadFileAsync()
     {
@@ -26,6 +27,19 @@ public class TorrentClient(string fileName)
         {
             throw new IOException($"Failed to read torrent file: {ex.Message}", ex);
         }
+    }
+    
+    private void CleanupConnection()
+    {
+        if (_stream != null)
+        {
+            _stream.Dispose();
+            _stream = null;
+        }
+
+        if (_tcpClient == null) return;
+        _tcpClient.Dispose();
+        _tcpClient = null;
     }
 
     public async Task<MetaData> GetMetaDataAsync()
@@ -102,16 +116,20 @@ public class TorrentClient(string fileName)
 
     public async Task<(byte[] HandshakeResponse, NetworkStream Stream)> HandShakeAsync(string peerIp)
     {
+        // Cleanup any existing connection before creating a new one
+        CleanupConnection();
+
         var fileContents = await ReadFileAsync();
         var dict = (BencodedDict)Bencode.Decode(fileContents);
         var infoDict = (BencodedDict)dict.Dict["info"];
         var peerEndpoint = IPEndPoint.Parse(peerIp);
 
-
+        _tcpClient = new TcpClient();
         var connectTask = _tcpClient.ConnectAsync(peerEndpoint);
 
         if (await Task.WhenAny(connectTask, Task.Delay(ConnectionTimeout)) != connectTask)
         {
+            CleanupConnection();
             throw new TimeoutException($"Connection to peer {peerIp} timed out");
         }
 
@@ -132,51 +150,70 @@ public class TorrentClient(string fileName)
         var response = new byte[HandshakeLength];
         var bytesRead = await _stream.ReadAsync(response.AsMemory(0, HandshakeLength));
 
-        if (bytesRead != HandshakeLength)
-        {
-            throw new InvalidOperationException($"Invalid handshake response length: {bytesRead}");
-        }
+        if (bytesRead == HandshakeLength) return (response, _stream);
+        CleanupConnection();
+        throw new InvalidOperationException($"Invalid handshake response length: {bytesRead}");
 
-        return (response, _stream);
     }
 
     public async Task<byte[]> DownloadPieceAsync(string peerIp, int pieceIndex)
     {
-        await HandShakeAsync(peerIp);
-        if (_stream == null)
+        try
         {
-            throw new InvalidOperationException(
-                "Handshake must be performed before downloading a piece");
+            await HandShakeAsync(peerIp);
+            if (_stream == null)
+            {
+                throw new InvalidOperationException("Handshake must be performed before downloading a piece");
+            }
+
+            ReceiveMessage(MessageType.Bitfield);
+            await SendMessageAsync(MessageType.Interested);
+            ReceiveMessage(MessageType.Unchoke);
+
+            var metaInfo = await GetMetaDataAsync();
+            var pieceLength = GetPieceLength(metaInfo, pieceIndex);
+            List<byte> pieceData = [];
+
+            for (var i = 0; i < Math.Ceiling((double)pieceLength / BlockSize); i++)
+            {
+                var blockOffset = i * BlockSize;
+                var blockSize = Math.Min(BlockSize, pieceLength - blockOffset);
+                await RequestBlockAsync(pieceIndex, blockOffset, blockSize);
+                var data = ReceiveMessage(MessageType.Piece);
+                pieceData.AddRange(data[8..]);
+            }
+
+            if (!VerifyPieceIntegrity(pieceData.ToArray(), metaInfo.PiecesHashes[pieceIndex]))
+            {
+                throw new InvalidOperationException($"Invalid piece hash: {metaInfo.PiecesHashes[pieceIndex]}");
+            }
+
+            return pieceData.ToArray();
         }
-
-        await ReceiveMessageAsync(MessageType.Bitfield);
-
-        await SendMessageAsync(MessageType.Interested);
-
-        await ReceiveMessageAsync(MessageType.Unchoke);
-
-        var metaInfo = await GetMetaDataAsync();
-
-        var pieceLength = GetPieceLength(metaInfo, pieceIndex);
-
-        List<byte> pieceData = [];
-
-        for (var i = 0; i < (double)pieceLength / BlockSize; i++)
+        finally
         {
-            var blockOffset = i * BlockSize;
-            var blockSize = Math.Min(BlockSize, pieceLength - i * BlockSize);
-            await RequestBlockAsync(pieceIndex, blockOffset, blockSize);
-            var (_, _, data) = await ReceiveMessageAsync(MessageType.Piece);
-            pieceData.AddRange(data[8..]);
+            CleanupConnection();
         }
-
-        if (!VerifyPieceIntegrity(pieceData.ToArray(), metaInfo.PiecesHashes[pieceIndex]))
-        {
-            throw new InvalidOperationException($"Invalid piece hash: {metaInfo.PiecesHashes[pieceIndex]}");
-        }
-
-        return pieceData.ToArray();
     }
+
+    public async Task<byte[]> DownloadFileAsync()
+    {
+        var metaInfo = await GetMetaDataAsync();
+        var peers = await GetPeersAsync();
+        var pieceCount = metaInfo.PiecesHashes.Count;
+        var fileData = new byte[metaInfo.Length];
+        var offset = 0;
+
+        for (int pieceIndex = 0; pieceIndex < pieceCount; pieceIndex++)
+        {
+            var pieceData = await DownloadPieceAsync(peers[0], pieceIndex);
+            pieceData.CopyTo(fileData, offset);
+            offset += pieceData.Length;
+        }
+
+        return fileData;
+    }
+
 
     private static bool VerifyPieceIntegrity(byte[] pieceBytes,
         string originalHash)
@@ -202,15 +239,14 @@ public class TorrentClient(string fileName)
         }
 
         // Send the message asynchronously
-        await _stream.WriteAsync(message);
+        await _stream!.WriteAsync(message);
     }
 
 
-    private async Task<(int messageLength, MessageType Type, byte[] Payload)> ReceiveMessageAsync(
-        MessageType messageType)
+    private byte[] ReceiveMessage(MessageType messageType)
     {
         var messageLengthBytes = new byte[4];
-        await _stream.ReadExactlyAsync(messageLengthBytes, 0, 4);
+        _stream!.ReadExactly(messageLengthBytes, 0, 4);
         if (BitConverter.IsLittleEndian)
         {
             Array.Reverse(messageLengthBytes);
@@ -226,15 +262,15 @@ public class TorrentClient(string fileName)
         }
 
         var payload = new byte[messageLength - 1];
-        await _stream.ReadExactlyAsync(payload, 0, payload.Length);
-        return (messageLength, messageType, payload);
+        _stream.ReadExactly(payload, 0, payload.Length);
+        return payload;
     }
 
 
     private async Task RequestBlockAsync(int index, int begin, int length)
     {
         var payload = new byte[12];
-        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan()[0..4], index);
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan()[..4], index);
         BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan()[4..8], begin);
         BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan()[8..12], length);
         Console.WriteLine($"Requesting block: Index={index}, Begin={begin}, Length={length}");

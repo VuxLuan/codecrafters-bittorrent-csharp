@@ -24,8 +24,7 @@ switch (command)
     {
         var torrent = new TorrentClient(param);
         var metaInfo = await torrent.GetMetaDataAsync();
-        Console.WriteLine(
-            $"Tracker URL: {metaInfo.TrackerUrl}");
+        Console.WriteLine($"Tracker URL: {metaInfo.TrackerUrl}");
         Console.WriteLine($"Length: {metaInfo.Length}");
         Console.WriteLine(
             $"Info Hash: {Convert.ToHexString(metaInfo.InfoHash).ToLower().Replace("-", "")}");
@@ -58,6 +57,14 @@ switch (command)
         var pieceData = await torrent.DownloadPieceAsync(peers[0], pieceId);
         File.WriteAllBytes(outputFilePath, pieceData);
         Console.WriteLine($"Piece {pieceId} downloaded to {outputFilePath}.");
+        break;
+    }
+    case "download":
+    {
+        var outputFilePath = args[2];
+        var torrent = new TorrentClient(args[3]);
+        var data = await torrent.DownloadFileAsync();
+        File.WriteAllBytes(outputFilePath, data);
         break;
     }
     default:
